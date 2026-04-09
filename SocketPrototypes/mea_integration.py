@@ -32,12 +32,12 @@ class IntegratedMEAInterface:
         self.device_connected = False
         self.channels_in_block = 0
         self.num_channels = 60
-        self.buffer_size = 100
+        self.buffer_size = 2500
         self.samplerate = 50000
         self.data_buffer = np.zeros((self.num_channels, self.buffer_size))
         self.data_ready = Event()
         self.recording_thread = None
-        self.stop_recording = Event()
+        self.stop_recording_event = Event()
         self.last_action = 0
         self.failure_count = 0
 
@@ -100,7 +100,7 @@ class IntegratedMEAInterface:
         self.dacq.EnableDigitalIn(DigitalDatastreamEnableEnumNet.DigitalIn |
                                  DigitalDatastreamEnableEnumNet.DigitalOut |
                                  DigitalDatastreamEnableEnumNet.Hs1SidebandLow |
-                                 DigitalDatastreamEnumNet.Hs1SidebandHigh, 0)
+                                 DigitalDatastreamEnableEnumNet.Hs1SidebandHigh, 0)
         self.dacq.EnableChecksum(True, 0)
         
         # Create boxed objects for out parameters
@@ -127,7 +127,7 @@ class IntegratedMEAInterface:
         
         # Configure channel block
         queue_size = self.samplerate
-        threshold = self.samplerate // 100
+        threshold = self.samplerate // 10
         
         self.dacq.ChannelBlock.SetSelectedChannels(
             self.channels_in_block // 2, 
@@ -170,7 +170,7 @@ class IntegratedMEAInterface:
         print("Recording started")
         
         # Start a thread to continuously process data
-        self.stop_recording.clear()
+        self.stop_recording_event.clear()
         self.recording_thread = Thread(target=self.recording_loop)
         self.recording_thread.daemon = True
         self.recording_thread.start()
@@ -180,7 +180,7 @@ class IntegratedMEAInterface:
     def stop_recording(self):
         """Stop recording data from the MEA."""
         if self.recording_thread and self.recording_thread.is_alive():
-            self.stop_recording.set()
+            self.stop_recording_event.set()
             self.recording_thread.join(timeout=2.0)
             
         if self.device_connected:
@@ -231,7 +231,7 @@ class IntegratedMEAInterface:
     
     def recording_loop(self):
         """Background thread to continuously process incoming data."""
-        while not self.stop_recording.is_set():
+        while not self.stop_recording_event.is_set():
             # Wait for new data with timeout
             if self.data_ready.wait(timeout=0.1):
                 self.data_ready.clear()
